@@ -1,4 +1,4 @@
-package com.knobtviker.android.things.contrib.driver;
+package com.knobtviker.android.things.contrib.driver.bme280;
 
 import android.hardware.Sensor;
 
