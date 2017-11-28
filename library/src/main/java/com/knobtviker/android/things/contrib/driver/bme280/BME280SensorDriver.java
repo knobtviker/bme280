@@ -292,7 +292,7 @@ public class BME280SensorDriver implements AutoCloseable {
 
         @Override
         public UserSensorReading read() throws IOException {
-            return new UserSensorReading(new float[]{mDevice.readTemperature()});
+            return new UserSensorReading(new float[]{mDevice.readHumidity()});
         }
 
         @Override

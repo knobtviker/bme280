@@ -418,7 +418,7 @@ public class BME280 implements AutoCloseable {
      *
      * @return the current humidity in percentage
      */
-    private float readHumidity() throws IOException, IllegalStateException {
+    public float readHumidity() throws IOException, IllegalStateException {
         final int rawHumidity = readSampleHumidity(BME280_REG_HUM);
         return compensateHumidity(rawHumidity, readTemperature(), mHumidityCalibrationData);
     }
