@@ -529,14 +529,16 @@ public class BME280 implements AutoCloseable {
         final int dig_H5 = calibration[4];
         final int dig_H6 = calibration[5];
 
-        float h = fineTemperature - 76800.0f;
-        h = (rawHumidity - (dig_H4 * 64.0f + dig_H5 / 16384.8f * h)) * (dig_H2 / 65536.0f * (1.0f + dig_H6 / 67108864.0f * h * (1.0f + dig_H3 / 67108864.0f * h)));
-        h = h * (1.0f - dig_H1 * h / 524288.0f);
-        if (h > 100.0f) {
-            h = 100.0f;
-        } else if (h < 0.0f) {
-            h = 0.0f;
+        float var_H = (fineTemperature - 76800f);
+        var_H = (rawHumidity - (((float) dig_H4) * 64f + ((float) dig_H5) / 16384f * var_H)) * (((float) dig_H2) / 65536f * (1f + ((float) dig_H6) / 67108864f * var_H * (1f + ((float) dig_H3) / 67108864f * var_H)));
+        var_H = var_H * (1f - ((float) dig_H1) * var_H / 524288f);
+
+        if (var_H > 100) {
+            var_H = 100f;
+        } else if (var_H < 0) {
+            var_H = 0f;
         }
-        return h;
+
+        return var_H;
     }
 }
