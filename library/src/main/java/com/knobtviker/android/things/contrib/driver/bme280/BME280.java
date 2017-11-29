@@ -351,6 +351,19 @@ public class BME280 implements AutoCloseable {
     }
 
     /**
+     * Read the current temperature.
+     *
+     * @return the current temperature in degrees Celsius
+     */
+    public float readTemperatureForHumidity() throws IOException, IllegalStateException {
+        if (mTemperatureOversampling == OVERSAMPLING_SKIPPED) {
+            throw new IllegalStateException("BME280 temperature oversampling is skipped");
+        }
+        final int rawTemp = readSample(BME280_REG_TEMP);
+        return compensateTemperature(rawTemp, mTempCalibrationData)[1];
+    }
+
+    /**
      * Read the current barometric pressure. If you also intend to use temperature readings, prefer
      * {@link #readTemperatureAndPressure()} instead since sampling the current pressure already
      * requires sampling the current temperature.
@@ -420,7 +433,7 @@ public class BME280 implements AutoCloseable {
      */
     public float readHumidity() throws IOException, IllegalStateException {
         final int rawHumidity = readSampleHumidity(BME280_REG_HUM);
-        return compensateHumidity(rawHumidity, readTemperature(), mHumidityCalibrationData);
+        return compensateHumidity(rawHumidity, readTemperatureForHumidity(), mHumidityCalibrationData);
     }
 
     /**
