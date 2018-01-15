@@ -297,13 +297,13 @@ public class BME280SensorDriver implements AutoCloseable {
     }
 
     private void maybeSleep() throws IOException {
-        if ((mTemperatureUserDriver == null || !mTemperatureUserDriver.isEnabled())
-            && (mPressureUserDriver == null || !mPressureUserDriver.isEnabled())
-            && (mHumidityUserDriver == null || !mHumidityUserDriver.isEnabled())) {
-            mDevice.setMode(BME280.MODE_SLEEP);
-        } else {
+//        if ((mTemperatureUserDriver == null || !mTemperatureUserDriver.isEnabled())
+//            && (mPressureUserDriver == null || !mPressureUserDriver.isEnabled())
+//            && (mHumidityUserDriver == null || !mHumidityUserDriver.isEnabled())) {
+//            mDevice.setMode(BME280.MODE_SLEEP);
+//        } else {
             mDevice.setMode(BME280.MODE_NORMAL);
-        }
+//        }
     }
 
     private void syncSamplingState() throws IOException {
