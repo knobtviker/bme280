@@ -15,7 +15,6 @@ import java.util.UUID;
  */
 
 public class BME280SensorDriver implements AutoCloseable {
-    private static final String TAG = BME280SensorDriver.class.getSimpleName();
 
     private BME280 mDevice;
 
