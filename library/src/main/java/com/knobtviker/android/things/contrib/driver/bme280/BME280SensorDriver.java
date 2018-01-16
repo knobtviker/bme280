@@ -189,8 +189,9 @@ public class BME280SensorDriver implements AutoCloseable {
         @Override
         public void setEnabled(boolean enabled) throws IOException {
             mEnabled = enabled;
-            syncSamplingState();
-            maybeSleep();
+            mDevice.setSamplingWeatherStation();
+//            syncSamplingState();
+//            maybeSleep();
         }
 
         private boolean isEnabled() {
@@ -238,8 +239,9 @@ public class BME280SensorDriver implements AutoCloseable {
         @Override
         public void setEnabled(boolean enabled) throws IOException {
             mEnabled = enabled;
-            syncSamplingState();
-            maybeSleep();
+            mDevice.setSamplingWeatherStation();
+//            syncSamplingState();
+//            maybeSleep();
         }
 
         private boolean isEnabled() {
@@ -287,8 +289,9 @@ public class BME280SensorDriver implements AutoCloseable {
         @Override
         public void setEnabled(boolean enabled) throws IOException {
             mEnabled = enabled;
-            syncSamplingState();
-            maybeSleep();
+            mDevice.setSamplingWeatherStation();
+//            syncSamplingState();
+//            maybeSleep();
         }
 
         private boolean isEnabled() {
@@ -296,23 +299,27 @@ public class BME280SensorDriver implements AutoCloseable {
         }
     }
 
-    private void maybeSleep() throws IOException {
+//    private void maybeSleep() throws IOException {
 //        if ((mTemperatureUserDriver == null || !mTemperatureUserDriver.isEnabled())
 //            && (mPressureUserDriver == null || !mPressureUserDriver.isEnabled())
 //            && (mHumidityUserDriver == null || !mHumidityUserDriver.isEnabled())) {
 //            mDevice.setMode(BME280.MODE_SLEEP);
 //        } else {
-            mDevice.setMode(BME280.MODE_NORMAL);
+//            mDevice.setMode(BME280.MODE_SLEEP);
 //        }
-    }
+//    }
 
-    private void syncSamplingState() throws IOException {
-        final boolean humidityEnabled = mHumidityUserDriver != null && mHumidityUserDriver.isEnabled();
-        final boolean pressureEnabled = mPressureUserDriver != null && mPressureUserDriver.isEnabled();
-        final boolean temperatureEnabled = humidityEnabled || pressureEnabled || mTemperatureUserDriver != null && mTemperatureUserDriver.isEnabled();
+//    private void syncSamplingState() throws IOException {
+//        final boolean humidityEnabled = mHumidityUserDriver != null && mHumidityUserDriver.isEnabled();
+//        final boolean pressureEnabled = mPressureUserDriver != null && mPressureUserDriver.isEnabled();
+//        final boolean temperatureEnabled = humidityEnabled || pressureEnabled || mTemperatureUserDriver != null && mTemperatureUserDriver.isEnabled();
+//
+//        mDevice.setTemperatureOversampling(temperatureEnabled ? BME280.OVERSAMPLING_1X : BME280.OVERSAMPLING_SKIPPED);
+//        mDevice.setPressureOversampling(pressureEnabled ? BME280.OVERSAMPLING_1X : BME280.OVERSAMPLING_SKIPPED);
+//        mDevice.setHumidityOversampling(humidityEnabled ? BME280.OVERSAMPLING_1X : BME280.OVERSAMPLING_SKIPPED);
 
-        mDevice.setTemperatureOversampling(temperatureEnabled ? BME280.OVERSAMPLING_1X : BME280.OVERSAMPLING_SKIPPED);
-        mDevice.setPressureOversampling(pressureEnabled ? BME280.OVERSAMPLING_1X : BME280.OVERSAMPLING_SKIPPED);
-        mDevice.setHumidityOversampling(humidityEnabled ? BME280.OVERSAMPLING_1X : BME280.OVERSAMPLING_SKIPPED);
-    }
+//        mDevice.setTemperatureOversampling(BME280.OVERSAMPLING_1X);
+//        mDevice.setPressureOversampling(BME280.OVERSAMPLING_1X);
+//        mDevice.setHumidityOversampling(BME280.OVERSAMPLING_1X);
+//    }
 }

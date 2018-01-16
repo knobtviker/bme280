@@ -87,9 +87,9 @@ public class BME280 implements AutoCloseable {
     public @interface Mode {
     }
 
-    public static final int MODE_SLEEP = 0;
-    public static final int MODE_FORCED = 1;
-    public static final int MODE_NORMAL = 2;
+    public static final int MODE_SLEEP = 0b00;
+    public static final int MODE_FORCED = 0b01;
+    public static final int MODE_NORMAL = 0b11;
 
     /**
      * Oversampling multiplier.
@@ -99,12 +99,44 @@ public class BME280 implements AutoCloseable {
     public @interface Oversampling {
     }
 
-    public static final int OVERSAMPLING_SKIPPED = 0;
-    public static final int OVERSAMPLING_1X = 1;
-    public static final int OVERSAMPLING_2X = 2;
-    public static final int OVERSAMPLING_4X = 3;
-    public static final int OVERSAMPLING_8X = 4;
-    public static final int OVERSAMPLING_16X = 5;
+    public static final int OVERSAMPLING_SKIPPED = 0b000;
+    public static final int OVERSAMPLING_1X = 0b001;
+    public static final int OVERSAMPLING_2X = 0b010;
+    public static final int OVERSAMPLING_4X = 0b011;
+    public static final int OVERSAMPLING_8X = 0b100;
+    public static final int OVERSAMPLING_16X = 0b101;
+
+    /**
+     * Pass filter.
+     */
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({FILTER_OFF, FILTER_X2, FILTER_X4, FILTER_X8, FILTER_X16})
+    public @interface Filter {
+    }
+
+    public static final int FILTER_OFF = 0b000;
+    public static final int FILTER_X2 = 0b001;
+    public static final int FILTER_X4 = 0b010;
+    public static final int FILTER_X8 = 0b011;
+    public static final int FILTER_X16 = 0b100;
+
+
+    /**
+     * Standby duration.
+     */
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({STANDBY_MS_0_5, STANDBY_MS_10, STANDBY_MS_20, STANDBY_MS_62_5, STANDBY_MS_125, STANDBY_MS_250, STANDBY_MS_500, STANDBY_MS_1000})
+    public @interface StandByDuration {
+    }
+
+    public static final int STANDBY_MS_0_5 = 0b000;
+    public static final int STANDBY_MS_10 = 0b110;
+    public static final int STANDBY_MS_20 = 0b111;
+    public static final int STANDBY_MS_62_5 = 0b001;
+    public static final int STANDBY_MS_125 = 0b010;
+    public static final int STANDBY_MS_250 = 0b011;
+    public static final int STANDBY_MS_500 = 0b100;
+    public static final int STANDBY_MS_1000 = 0b101;
 
     // Registers
     private static final int BME280_REG_TEMP_CALIB_1 = 0x88;
@@ -132,9 +164,9 @@ public class BME280 implements AutoCloseable {
     private static final int BME280_REG_ID = 0xD0;
     private static final int BME280_REG_VERSION = 0xD1;
     private static final int BME280_REG_SOFTRESET = 0xE0;
-    private static final int BME280_REG_CTRL = 0xF4;
     private static final int BME280_REG_CTRL_HUM = 0xF2;
     private static final int BME280_REG_STATUS = 0xF3;
+    private static final int BME280_REG_CTRL = 0xF4;
     private static final int BME280_REG_CONFIG = 0xF5;
 
     private static final int BME280_REG_PRESS = 0xF7;
@@ -153,6 +185,10 @@ public class BME280 implements AutoCloseable {
     private static final int BME280_OVERSAMPLING_HUMIDITY_BITSHIFT = 2;
 
     private I2cDevice mDevice;
+    private Config config;
+    private Measurement measurement;
+    private MeasurementHumidity measurementHumidity;
+
     private final int[] mTempCalibrationData = new int[3];
     private final int[] mPressureCalibrationData = new int[9];
     private final int[] mHumidityCalibrationData = new int[6];
@@ -160,9 +196,6 @@ public class BME280 implements AutoCloseable {
     private boolean mEnabled = false;
     private int mChipId;
     private int mMode;
-    private int mPressureOversampling;
-    private int mTemperatureOversampling;
-    private int mHumidityOversampling;
     private int t_fine;
 
     /**
@@ -222,10 +255,13 @@ public class BME280 implements AutoCloseable {
 
     private void connect(I2cDevice device) throws IOException {
         mDevice = device;
+        config = new Config();
+        measurement = new Measurement();
+        measurementHumidity = new MeasurementHumidity();
 
         mChipId = mDevice.readRegByte(BME280_REG_ID);
         if (mChipId != CHIP_ID_BME280) {
-            throw new IOException("Failed to find Bosch BME280! Chip ID "+mChipId);
+            throw new IOException("Failed to find Bosch BME280! Chip ID " + mChipId);
         }
 
         mDevice.writeRegByte(BME280_REG_SOFTRESET, (byte) 0xB6);
@@ -264,97 +300,42 @@ public class BME280 implements AutoCloseable {
     }
 
     /**
-    * Returns true if chip is busy reading calibration data
-    */
+     * Returns true if chip is busy reading calibration data
+     */
     private boolean isReadingCalibration() throws IOException {
         final int rStatus = mDevice.readRegByte(BME280_REG_STATUS) & 0xff;
 
         return (rStatus & (1 << 0)) != 0;
     }
 
-    /**
-     * Set the power mode of the sensor.
-     *
-     * @param mode power mode.
-     * @throws IOException
-     */
-    public void setMode(@Mode int mode) throws IOException {
-        if (mDevice == null) {
-            throw new IllegalStateException("I2C device not open");
-        }
+    public void setSampling(@Mode final int mode, @Oversampling final int temperatureSampling,
+                            @Oversampling final int pressureSampling, @Oversampling final int humiditySampling,
+                            @Filter final int filter, @StandByDuration final int duration) throws IOException {
 
-        int regCtrl = mDevice.readRegByte(BME280_REG_CTRL) & 0xff;
-        if (mode == MODE_SLEEP) {
-            regCtrl &= ~BME280_POWER_MODE_MASK;
-        } else {
-            regCtrl |= BME280_POWER_MODE_NORMAL;
-        }
-        mDevice.writeRegByte(BME280_REG_CTRL, (byte) (regCtrl));
-        mMode = mode;
+        measurement.mode = mode;
+        measurement.osrs_t = temperatureSampling;
+        measurement.osrs_p = pressureSampling;
+
+        measurementHumidity.osrs_h = humiditySampling;
+
+        config.t_sb = duration;
+        config.filter = filter;
+
+        // You must make sure to also set REGISTER_CONTROL after setting the CONTROLHUMID register, otherwise the values won't be applied
+        mDevice.writeRegByte(BME280_REG_CTRL_HUM, (byte) measurementHumidity.get());
+        mDevice.writeRegByte(BME280_REG_CONFIG, (byte) config.get());
+        mDevice.writeRegByte(BME280_REG_CTRL, (byte) measurement.get());
     }
 
-    /**
-     * Set oversampling multiplier for the temperature measurement.
-     *
-     * @param oversampling temperature oversampling multiplier.
-     * @throws IOException
-     */
-    public void setTemperatureOversampling(@Oversampling int oversampling) throws IOException {
-        if (mDevice == null) {
-            throw new IllegalStateException("I2C device not open");
-        }
-
-        int regCtrl = mDevice.readRegByte(BME280_REG_CTRL) & 0xff;
-        if (oversampling == OVERSAMPLING_SKIPPED) {
-            regCtrl &= ~BME280_OVERSAMPLING_TEMPERATURE_MASK;
-        } else {
-            regCtrl |= 1 << BME280_OVERSAMPLING_TEMPERATURE_BITSHIFT;
-        }
-        mDevice.writeRegByte(BME280_REG_CTRL, (byte) (regCtrl));
-        mTemperatureOversampling = oversampling;
+    public void setSamplingWeatherStation() throws IOException {
+        setSampling(
+            MODE_FORCED,
+            OVERSAMPLING_1X, OVERSAMPLING_1X, OVERSAMPLING_1X,
+            FILTER_OFF,
+            STANDBY_MS_0_5
+        );
     }
 
-    /**
-     * Set oversampling multiplier for the pressure measurement.
-     *
-     * @param oversampling pressure oversampling multiplier.
-     * @throws IOException
-     */
-    public void setPressureOversampling(@Oversampling int oversampling) throws IOException {
-        if (mDevice == null) {
-            throw new IllegalStateException("I2C device not open");
-        }
-
-        int regCtrl = mDevice.readRegByte(BME280_REG_CTRL) & 0xff;
-        if (oversampling == OVERSAMPLING_SKIPPED) {
-            regCtrl &= ~BME280_OVERSAMPLING_PRESSURE_MASK;
-        } else {
-            regCtrl |= 1 << BME280_OVERSAMPLING_PRESSURE_BITSHIFT;
-        }
-        mDevice.writeRegByte(BME280_REG_CTRL, (byte) (regCtrl));
-        mPressureOversampling = oversampling;
-    }
-
-    /**
-     * Set oversampling multiplier for the pressure measurement.
-     *
-     * @param oversampling pressure oversampling multiplier.
-     * @throws IOException
-     */
-    public void setHumidityOversampling(@Oversampling int oversampling) throws IOException {
-        if (mDevice == null) {
-            throw new IllegalStateException("I2C device not open");
-        }
-
-        int regCtrl = mDevice.readRegByte(BME280_REG_CTRL_HUM) & 0xff;
-        if (oversampling == OVERSAMPLING_SKIPPED) {
-            regCtrl &= ~BME280_OVERSAMPLING_HUMIDITY_MASK;
-        } else {
-            regCtrl |= 1 << BME280_OVERSAMPLING_HUMIDITY_BITSHIFT;
-        }
-        mDevice.writeRegByte(BME280_REG_CTRL_HUM, (byte) (regCtrl));
-        mHumidityOversampling = oversampling;
-    }
 
     /**
      * Returns the sensor chip ID.
@@ -369,7 +350,7 @@ public class BME280 implements AutoCloseable {
      * @return the current temperature in degrees Celsius
      */
     public float readTemperature() throws IOException, IllegalStateException {
-        if (mTemperatureOversampling == OVERSAMPLING_SKIPPED) {
+        if (measurement.osrs_t == OVERSAMPLING_SKIPPED) {
             throw new IllegalStateException("BME280 temperature oversampling is skipped");
         }
 
@@ -403,10 +384,10 @@ public class BME280 implements AutoCloseable {
      * @throws IOException
      */
     public float[] readTemperatureAndPressure() throws IOException, IllegalStateException {
-        if (mTemperatureOversampling == OVERSAMPLING_SKIPPED) {
+        if (measurement.osrs_t == OVERSAMPLING_SKIPPED) {
             throw new IllegalStateException("BME280 temperature oversampling is skipped.");
         }
-        if (mPressureOversampling == OVERSAMPLING_SKIPPED) {
+        if (measurement.osrs_p == OVERSAMPLING_SKIPPED) {
             throw new IllegalStateException("BME280 pressure oversampling is skipped.");
         }
         // The pressure compensation formula requires the fine temperature reading, so we always read temperature first.
@@ -427,13 +408,13 @@ public class BME280 implements AutoCloseable {
      * @throws IOException
      */
     public float[] readAll() throws IOException, IllegalStateException {
-        if (mTemperatureOversampling == OVERSAMPLING_SKIPPED) {
+        if (measurement.osrs_t == OVERSAMPLING_SKIPPED) {
             throw new IllegalStateException("BME280 temperature oversampling is skipped.");
         }
-        if (mPressureOversampling == OVERSAMPLING_SKIPPED) {
+        if (measurement.osrs_p == OVERSAMPLING_SKIPPED) {
             throw new IllegalStateException("BME280 pressure oversampling is skipped.");
         }
-        if (mHumidityOversampling == OVERSAMPLING_SKIPPED) {
+        if (measurementHumidity.osrs_h == OVERSAMPLING_SKIPPED) {
             throw new IllegalStateException("BME280 humidity oversampling is skipped.");
         }
         // The humidity and pressure compensation formula requires the fine temperature reading, so we always read temperature first.
@@ -515,7 +496,7 @@ public class BME280 implements AutoCloseable {
     // Compensation formula from the BME280 datasheet.
 
     private float compensatePressure(final int measuredPressure, final int[] calibration) {
-        float var1 = (float)t_fine / 2.0f - 64000.0f;
+        float var1 = (float) t_fine / 2.0f - 64000.0f;
         float var2 = var1 * var1 * calibration[5] / 32768.0f;
         var2 = var2 + var1 * calibration[4] * 2.0f;
         var2 = var2 / 4.0f + calibration[3] * 65536.0f;
