@@ -15,9 +15,9 @@ public class MeasurementHumidity {
     // 011 = x4
     // 100 = x8
     // 101 and above = x16
-    int osrs_h;
+    int oversamplingHumidity;
 
     int get() {
-        return (osrs_h);
+        return (oversamplingHumidity);
     }
 }

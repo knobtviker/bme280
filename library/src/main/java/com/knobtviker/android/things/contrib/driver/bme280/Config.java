@@ -14,7 +14,7 @@ public class Config {
     // 101 = 1000 ms
     // 110 = 10 ms
     // 111 = 20 ms
-    int t_sb;
+    int duration;
 
     // filter settings
     // 000 = filter off
@@ -29,6 +29,6 @@ public class Config {
     int spi3w_en = 0;
 
     int get() {
-        return (t_sb << 5) | (filter << 3) | spi3w_en;
+        return (duration << 5) | (filter << 3) | spi3w_en;
     }
 }

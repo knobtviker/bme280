@@ -21,6 +21,17 @@ import java.lang.annotation.RetentionPolicy;
 public class BME280 implements AutoCloseable {
     private static final String TAG = BME280.class.getSimpleName();
 
+
+    /**
+     * Chip vendor for the BME280
+     */
+    public static final String CHIP_VENDOR = "Bosch";
+
+    /**
+     * Chip name for the BME280
+     */
+    public static final String CHIP_NAME = "BME280";
+
     /**
      * Chip ID for the BME280
      */
@@ -173,30 +184,16 @@ public class BME280 implements AutoCloseable {
     private static final int BME280_REG_TEMP = 0xFA;
     private static final int BME280_REG_HUM = 0xFD;
 
-    private static final int BME280_POWER_MODE_MASK = 0b00000011;
-    private static final int BME280_POWER_MODE_SLEEP = 0b00000000;
-    private static final int BME280_POWER_MODE_NORMAL = 0b00000011;
-
-    private static final int BME280_OVERSAMPLING_TEMPERATURE_MASK = 0b11100000;
-    private static final int BME280_OVERSAMPLING_TEMPERATURE_BITSHIFT = 5;
-    private static final int BME280_OVERSAMPLING_PRESSURE_MASK = 0b00011100;
-    private static final int BME280_OVERSAMPLING_PRESSURE_BITSHIFT = 2;
-    private static final int BME280_OVERSAMPLING_HUMIDITY_MASK = 0b00000111;
-    private static final int BME280_OVERSAMPLING_HUMIDITY_BITSHIFT = 2;
-
-    private I2cDevice mDevice;
+    private I2cDevice device;
     private Config config;
     private Measurement measurement;
     private MeasurementHumidity measurementHumidity;
+    private Calibration calibration;
 
-    private final int[] mTempCalibrationData = new int[3];
-    private final int[] mPressureCalibrationData = new int[9];
-    private final int[] mHumidityCalibrationData = new int[6];
-    private final byte[] mBuffer = new byte[3]; // for reading temperature and pressure sensor values
-    private boolean mEnabled = false;
-    private int mChipId;
-    private int mMode;
-    private int t_fine;
+    private final byte[] buffer = new byte[3];
+
+    private int chipId;
+    private int temperatureFine;
 
     /**
      * Create a new BMP/BME280 sensor driver connected on the given bus.
@@ -244,27 +241,29 @@ public class BME280 implements AutoCloseable {
      */
     @Override
     public void close() throws IOException {
-        if (mDevice != null) {
+        if (device != null) {
             try {
-                mDevice.close();
+                device.close();
             } finally {
-                mDevice = null;
+                device = null;
             }
         }
     }
 
     private void connect(I2cDevice device) throws IOException {
-        mDevice = device;
+        this.device = device;
+
+        calibration = new Calibration();
         config = new Config();
         measurement = new Measurement();
         measurementHumidity = new MeasurementHumidity();
 
-        mChipId = mDevice.readRegByte(BME280_REG_ID);
-        if (mChipId != CHIP_ID_BME280) {
-            throw new IOException("Failed to find Bosch BME280! Chip ID " + mChipId);
+        chipId = this.device.readRegByte(BME280_REG_ID);
+        if (chipId != CHIP_ID_BME280) {
+            throw new IOException("Failed to find Bosch BME280! Chip ID " + chipId);
         }
 
-        mDevice.writeRegByte(BME280_REG_SOFTRESET, (byte) 0xB6);
+        this.device.writeRegByte(BME280_REG_SOFTRESET, (byte) 0xB6);
 
         SystemClock.sleep(300);
 
@@ -273,37 +272,37 @@ public class BME280 implements AutoCloseable {
         }
 
         // Read temperature calibration data (3 words). First value is unsigned.
-        mTempCalibrationData[0] = mDevice.readRegWord(BME280_REG_TEMP_CALIB_1) & 0xffff;
-        mTempCalibrationData[1] = mDevice.readRegWord(BME280_REG_TEMP_CALIB_2);
-        mTempCalibrationData[2] = mDevice.readRegWord(BME280_REG_TEMP_CALIB_3);
+        calibration.temperature[0] = this.device.readRegWord(BME280_REG_TEMP_CALIB_1) & 0xffff;
+        calibration.temperature[1] = this.device.readRegWord(BME280_REG_TEMP_CALIB_2);
+        calibration.temperature[2] = this.device.readRegWord(BME280_REG_TEMP_CALIB_3);
         // Read pressure calibration data (9 words). First value is unsigned.
-        mPressureCalibrationData[0] = mDevice.readRegWord(BME280_REG_PRESS_CALIB_1) & 0xffff;
-        mPressureCalibrationData[1] = mDevice.readRegWord(BME280_REG_PRESS_CALIB_2);
-        mPressureCalibrationData[2] = mDevice.readRegWord(BME280_REG_PRESS_CALIB_3);
-        mPressureCalibrationData[3] = mDevice.readRegWord(BME280_REG_PRESS_CALIB_4);
-        mPressureCalibrationData[4] = mDevice.readRegWord(BME280_REG_PRESS_CALIB_5);
-        mPressureCalibrationData[5] = mDevice.readRegWord(BME280_REG_PRESS_CALIB_6);
-        mPressureCalibrationData[6] = mDevice.readRegWord(BME280_REG_PRESS_CALIB_7);
-        mPressureCalibrationData[7] = mDevice.readRegWord(BME280_REG_PRESS_CALIB_8);
-        mPressureCalibrationData[8] = mDevice.readRegWord(BME280_REG_PRESS_CALIB_9);
+        calibration.pressure[0] = this.device.readRegWord(BME280_REG_PRESS_CALIB_1) & 0xffff;
+        calibration.pressure[1] = this.device.readRegWord(BME280_REG_PRESS_CALIB_2);
+        calibration.pressure[2] = this.device.readRegWord(BME280_REG_PRESS_CALIB_3);
+        calibration.pressure[3] = this.device.readRegWord(BME280_REG_PRESS_CALIB_4);
+        calibration.pressure[4] = this.device.readRegWord(BME280_REG_PRESS_CALIB_5);
+        calibration.pressure[5] = this.device.readRegWord(BME280_REG_PRESS_CALIB_6);
+        calibration.pressure[6] = this.device.readRegWord(BME280_REG_PRESS_CALIB_7);
+        calibration.pressure[7] = this.device.readRegWord(BME280_REG_PRESS_CALIB_8);
+        calibration.pressure[8] = this.device.readRegWord(BME280_REG_PRESS_CALIB_9);
         // Read humidity calibration data (6 words). First value is unsigned.
-        mHumidityCalibrationData[0] = mDevice.readRegByte(BME280_REG_HUM_CALIB_1) & 0xff;
-        mHumidityCalibrationData[1] = mDevice.readRegWord(BME280_REG_HUM_CALIB_2);
-        mHumidityCalibrationData[2] = mDevice.readRegByte(BME280_REG_HUM_CALIB_3) & 0xff;
-        int E4 = mDevice.readRegByte(BME280_REG_HUM_CALIB_4) & 0xff;
-        int E5 = mDevice.readRegByte(BME280_REG_HUM_CALIB_5) & 0xff;
-        int E6 = mDevice.readRegByte(BME280_REG_HUM_CALIB_6) & 0xff;
-        int E7 = mDevice.readRegByte(BME280_REG_HUM_CALIB_7);
-        mHumidityCalibrationData[3] = (E4 << 4) | (E5 & 0x0F);
-        mHumidityCalibrationData[4] = (E6 << 4) | (E5 >> 4);
-        mHumidityCalibrationData[5] = E7;
+        calibration.humidity[0] = this.device.readRegByte(BME280_REG_HUM_CALIB_1) & 0xff;
+        calibration.humidity[1] = this.device.readRegWord(BME280_REG_HUM_CALIB_2);
+        calibration.humidity[2] = this.device.readRegByte(BME280_REG_HUM_CALIB_3) & 0xff;
+        int E4 = this.device.readRegByte(BME280_REG_HUM_CALIB_4) & 0xff;
+        int E5 = this.device.readRegByte(BME280_REG_HUM_CALIB_5) & 0xff;
+        int E6 = this.device.readRegByte(BME280_REG_HUM_CALIB_6) & 0xff;
+        int E7 = this.device.readRegByte(BME280_REG_HUM_CALIB_7);
+        calibration.humidity[3] = (E4 << 4) | (E5 & 0x0F);
+        calibration.humidity[4] = (E6 << 4) | (E5 >> 4);
+        calibration.humidity[5] = E7;
     }
 
     /**
      * Returns true if chip is busy reading calibration data
      */
     private boolean isReadingCalibration() throws IOException {
-        final int rStatus = mDevice.readRegByte(BME280_REG_STATUS) & 0xff;
+        final int rStatus = device.readRegByte(BME280_REG_STATUS) & 0xff;
 
         return (rStatus & (1 << 0)) != 0;
     }
@@ -313,18 +312,27 @@ public class BME280 implements AutoCloseable {
                             @Filter final int filter, @StandByDuration final int duration) throws IOException {
 
         measurement.mode = mode;
-        measurement.osrs_t = temperatureSampling;
-        measurement.osrs_p = pressureSampling;
+        measurement.oversamplingTemperature = temperatureSampling;
+        measurement.oversamplingPressure = pressureSampling;
 
-        measurementHumidity.osrs_h = humiditySampling;
+        measurementHumidity.oversamplingHumidity = humiditySampling;
 
-        config.t_sb = duration;
+        config.duration = duration;
         config.filter = filter;
 
-        // You must make sure to also set REGISTER_CONTROL after setting the CONTROLHUMID register, otherwise the values won't be applied
-        mDevice.writeRegByte(BME280_REG_CTRL_HUM, (byte) measurementHumidity.get());
-        mDevice.writeRegByte(BME280_REG_CONFIG, (byte) config.get());
-        mDevice.writeRegByte(BME280_REG_CTRL, (byte) measurement.get());
+        // You must make sure to also set BME280_REG_CTRL after setting the BME280_REG_CTRL_HUM register, otherwise the values won't be applied
+        device.writeRegByte(BME280_REG_CTRL_HUM, (byte) measurementHumidity.get());
+        device.writeRegByte(BME280_REG_CONFIG, (byte) config.get());
+        device.writeRegByte(BME280_REG_CTRL, (byte) measurement.get());
+    }
+
+    public void setSamplingNormal() throws IOException {
+        setSampling(
+            MODE_NORMAL,
+            OVERSAMPLING_16X, OVERSAMPLING_16X, OVERSAMPLING_16X,
+            FILTER_OFF,
+            STANDBY_MS_0_5
+        );
     }
 
     public void setSamplingWeatherStation() throws IOException {
@@ -336,12 +344,32 @@ public class BME280 implements AutoCloseable {
         );
     }
 
+    public void setSamplingIndoorNavigation() throws IOException {
+        setSampling(
+            MODE_NORMAL,
+            OVERSAMPLING_2X, OVERSAMPLING_16X, OVERSAMPLING_1X,
+            FILTER_X16,
+            STANDBY_MS_0_5
+        );
+    }
+
+    public void takeForcedMeasurement() throws IOException {
+        // Only in forced mode
+        if (measurement.mode == MODE_FORCED) {
+            // Set to forced mode, i.e. "take next measurement"
+            device.writeRegByte(BME280_REG_CTRL, (byte) measurement.get());
+            // Wait until measurement has been completed, otherwise we would read the old values from the last measurement
+            while ((device.readRegByte(BME280_REG_STATUS) & 0x08) == 0) {
+                SystemClock.sleep(1);
+            }
+        }
+    }
 
     /**
      * Returns the sensor chip ID.
      */
     public int getChipId() {
-        return mChipId;
+        return chipId;
     }
 
     /**
@@ -350,17 +378,17 @@ public class BME280 implements AutoCloseable {
      * @return the current temperature in degrees Celsius
      */
     public float readTemperature() throws IOException, IllegalStateException {
-        if (measurement.osrs_t == OVERSAMPLING_SKIPPED) {
+        if (measurement.oversamplingTemperature == OVERSAMPLING_SKIPPED) {
             throw new IllegalStateException("BME280 temperature oversampling is skipped");
         }
 
         // Wait until measurement has been completed, otherwise we would read the values from the last measurement
-        while ((mDevice.readRegByte(BME280_REG_STATUS) & 0x08) == 0) {
+        while ((device.readRegByte(BME280_REG_STATUS) & 0x08) == 0) {
             SystemClock.sleep(20);
         }
 
         final int rawTemp = readSample(BME280_REG_TEMP);
-        return compensateTemperature(rawTemp, mTempCalibrationData);
+        return compensateTemperature(rawTemp, calibration.temperature);
     }
 
     /**
@@ -384,18 +412,18 @@ public class BME280 implements AutoCloseable {
      * @throws IOException
      */
     public float[] readTemperatureAndPressure() throws IOException, IllegalStateException {
-        if (measurement.osrs_t == OVERSAMPLING_SKIPPED) {
+        if (measurement.oversamplingTemperature == OVERSAMPLING_SKIPPED) {
             throw new IllegalStateException("BME280 temperature oversampling is skipped.");
         }
-        if (measurement.osrs_p == OVERSAMPLING_SKIPPED) {
+        if (measurement.oversamplingPressure == OVERSAMPLING_SKIPPED) {
             throw new IllegalStateException("BME280 pressure oversampling is skipped.");
         }
         // The pressure compensation formula requires the fine temperature reading, so we always read temperature first.
         final int rawTemp = readSample(BME280_REG_TEMP);
-        final float temperature = compensateTemperature(rawTemp, mTempCalibrationData);
+        final float temperature = compensateTemperature(rawTemp, calibration.temperature);
 
         final int rawPressure = readSample(BME280_REG_PRESS);
-        final float pressure = compensatePressure(rawPressure, mPressureCalibrationData);
+        final float pressure = compensatePressure(rawPressure, calibration.pressure);
 
         return new float[]{temperature, pressure};
     }
@@ -408,24 +436,24 @@ public class BME280 implements AutoCloseable {
      * @throws IOException
      */
     public float[] readAll() throws IOException, IllegalStateException {
-        if (measurement.osrs_t == OVERSAMPLING_SKIPPED) {
+        if (measurement.oversamplingTemperature == OVERSAMPLING_SKIPPED) {
             throw new IllegalStateException("BME280 temperature oversampling is skipped.");
         }
-        if (measurement.osrs_p == OVERSAMPLING_SKIPPED) {
+        if (measurement.oversamplingPressure == OVERSAMPLING_SKIPPED) {
             throw new IllegalStateException("BME280 pressure oversampling is skipped.");
         }
-        if (measurementHumidity.osrs_h == OVERSAMPLING_SKIPPED) {
+        if (measurementHumidity.oversamplingHumidity == OVERSAMPLING_SKIPPED) {
             throw new IllegalStateException("BME280 humidity oversampling is skipped.");
         }
         // The humidity and pressure compensation formula requires the fine temperature reading, so we always read temperature first.
         final int rawTemp = readSample(BME280_REG_TEMP);
-        final float temperature = compensateTemperature(rawTemp, mTempCalibrationData);
+        final float temperature = compensateTemperature(rawTemp, calibration.temperature);
 
         final int rawHumidity = readSampleHumidity(BME280_REG_HUM);
-        final float humidity = compensateHumidity(rawHumidity, mHumidityCalibrationData);
+        final float humidity = compensateHumidity(rawHumidity, calibration.humidity);
 
         final int rawPressure = readSample(BME280_REG_PRESS);
-        final float pressure = compensatePressure(rawPressure, mPressureCalibrationData);
+        final float pressure = compensatePressure(rawPressure, calibration.pressure);
 
         return new float[]{temperature, humidity, pressure};
     }
@@ -438,7 +466,7 @@ public class BME280 implements AutoCloseable {
     public float readHumidity() throws IOException, IllegalStateException {
         readTemperature();
         final int rawHumidity = readSampleHumidity(BME280_REG_HUM);
-        return compensateHumidity(rawHumidity, mHumidityCalibrationData);
+        return compensateHumidity(rawHumidity, calibration.humidity);
     }
 
     /**
@@ -447,16 +475,16 @@ public class BME280 implements AutoCloseable {
      * @throws IOException
      */
     private int readSample(final int address) throws IOException, IllegalStateException {
-        if (mDevice == null) {
+        if (device == null) {
             throw new IllegalStateException("I2C device not open");
         }
 
-        synchronized (mBuffer) {
-            mDevice.readRegBuffer(address, mBuffer, 3);
+        synchronized (buffer) {
+            device.readRegBuffer(address, buffer, 3);
             // msb[7:0] lsb[7:0] xlsb[7:4]
-            final int msb = mBuffer[0] & 0xff;
-            final int lsb = mBuffer[1] & 0xff;
-            final int xlsb = mBuffer[2] & 0xf0;
+            final int msb = buffer[0] & 0xff;
+            final int lsb = buffer[1] & 0xff;
+            final int xlsb = buffer[2] & 0xf0;
             // Convert to 20bit integer
             return (msb << 16 | lsb << 8 | xlsb) >> 4;
         }
@@ -468,16 +496,16 @@ public class BME280 implements AutoCloseable {
      * @throws IOException
      */
     private int readSampleHumidity(final int address) throws IOException, IllegalStateException {
-        if (mDevice == null) {
+        if (device == null) {
             throw new IllegalStateException("I2C device not open");
         }
 
-        synchronized (mBuffer) {
+        synchronized (buffer) {
             // Reading a byte buffer instead of a short to avoid having to deal with platform-specific endianness.
-            mDevice.readRegBuffer(address, mBuffer, 2);
+            device.readRegBuffer(address, buffer, 2);
             // msb[7:0] lsb[7:0]
-            int msb = mBuffer[0] & 0xff;
-            int lsb = mBuffer[1] & 0xff;
+            int msb = buffer[0] & 0xff;
+            int lsb = buffer[1] & 0xff;
             return msb << 8 | lsb;
 
         }
@@ -488,15 +516,14 @@ public class BME280 implements AutoCloseable {
         float var1 = (measuredTemperature / 16384.0f - calibrationData[0] / 1024.0f) * calibrationData[1];
         float var2 = ((measuredTemperature / 131072.0f - calibrationData[0] / 8192.0f) * (measuredTemperature / 131072.0f - calibrationData[0] / 8192.0f)) * calibrationData[2];
 
-        t_fine = (int) (var1 + var2);
+        temperatureFine = (int) (var1 + var2);
 
-        return t_fine / 5120.0f;
+        return temperatureFine / 5120.0f;
     }
 
     // Compensation formula from the BME280 datasheet.
-
     private float compensatePressure(final int measuredPressure, final int[] calibration) {
-        float var1 = (float) t_fine / 2.0f - 64000.0f;
+        float var1 = (float) temperatureFine / 2.0f - 64000.0f;
         float var2 = var1 * var1 * calibration[5] / 32768.0f;
         var2 = var2 + var1 * calibration[4] * 2.0f;
         var2 = var2 / 4.0f + calibration[3] * 65536.0f;
@@ -516,20 +543,12 @@ public class BME280 implements AutoCloseable {
 
         pressure = pressure / 100.0f;
 
-        if (pressure < MIN_PRESSURE_HPA) {
-            return MIN_PRESSURE_HPA;
-        }
-
-        if (pressure > MAX_PRESSURE_HPA) {
-            return MAX_PRESSURE_HPA;
-        }
-
-        return pressure;
+        return Math.min(Math.max(pressure, MIN_PRESSURE_HPA), MAX_PRESSURE_HPA);
     }
 
     // Compensation formula from the BME280 datasheet.
     private float compensateHumidity(final int measuredHumidity, final int[] calibration) {
-        float var1 = (float) t_fine - 76800.0f;
+        float var1 = (float) temperatureFine - 76800.0f;
         float var2 = (calibration[3] * 64.0f + (calibration[4] / 16384.0f) * var1);
         float var3 = measuredHumidity - var2;
         float var4 = calibration[1] / 65536.0f;
@@ -538,14 +557,6 @@ public class BME280 implements AutoCloseable {
         var6 = var3 * var4 * (var5 * var6);
         float humidity = var6 * (1.0f - calibration[0] * var6 / 524288.0f);
 
-        if (humidity > MAX_HUMIDITY_PERCENT) {
-            return MAX_HUMIDITY_PERCENT;
-        }
-
-        if (humidity < MIN_HUMIDITY_PERCENT) {
-            return MIN_HUMIDITY_PERCENT;
-        }
-
-        return humidity;
+        return Math.min(Math.max(humidity, MIN_HUMIDITY_PERCENT), MAX_HUMIDITY_PERCENT);
     }
 }

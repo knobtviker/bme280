@@ -12,7 +12,7 @@ public class Measurement {
     // 011 = x4
     // 100 = x8
     // 101 and above = x16
-    int osrs_t;
+    int oversamplingTemperature;
 
     // pressure oversampling
     // 000 = skipped
@@ -21,7 +21,7 @@ public class Measurement {
     // 011 = x4
     // 100 = x8
     // 101 and above = x16
-    int osrs_p;
+    int oversamplingPressure;
 
     // device mode
     // 00       = sleep
@@ -30,6 +30,6 @@ public class Measurement {
     int mode;
 
     int get() {
-        return (osrs_t << 5) | (osrs_p << 3) | mode;
+        return (oversamplingTemperature << 5) | (oversamplingPressure << 3) | mode;
     }
 }
