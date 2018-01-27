@@ -258,14 +258,14 @@ public class BME280 implements AutoCloseable {
         measurement = new Measurement();
         measurementHumidity = new MeasurementHumidity();
 
+        this.device.writeRegByte(BME280_REG_SOFTRESET, (byte) 0xB6);
+
+        SystemClock.sleep(300);
+
         chipId = this.device.readRegByte(BME280_REG_ID);
         if (chipId != CHIP_ID_BME280) {
             throw new IOException("Failed to find Bosch BME280! Chip ID " + chipId);
         }
-
-        this.device.writeRegByte(BME280_REG_SOFTRESET, (byte) 0xB6);
-
-        SystemClock.sleep(300);
 
         while (isReadingCalibration()) {
             SystemClock.sleep(100);
