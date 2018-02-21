@@ -1,4 +1,4 @@
-package com.knobtviker.android.things.contrib.driver.bme280;
+package com.knobtviker.android.things.contrib.community.driver.bme280;
 
 /**
  * Created by bojan on 16/01/2018.

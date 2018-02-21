@@ -1,4 +1,4 @@
-package com.knobtviker.android.things.contrib.driver.bme280;
+package com.knobtviker.android.things.contrib.community.driver.bme280;
 
 /**
  * Created by bojan on 10/07/2017.
@@ -296,6 +296,8 @@ public class BME280 implements AutoCloseable {
         calibration.humidity[3] = (E4 << 4) | (E5 & 0x0F);
         calibration.humidity[4] = (E6 << 4) | (E5 >> 4);
         calibration.humidity[5] = E7;
+
+        setSamplingNormal();
     }
 
     /**
