@@ -1,7 +1,7 @@
 # Bosch BME280
 Android Things Bosch BME280 driver
 
-[![Release](https://jitpack.io/v/knobtviker/bme280.svg)](https://jitpack.io/#knobtviker/bme280)
+[ ![Download](https://api.bintray.com/packages/knobtviker/maven/bme280/images/download.svg) ](https://bintray.com/knobtviker/maven/bme280/_latestVersion)
 
 This driver supports [BME280](https://www.bosch-sensortec.com/bst/products/all_products/bme280) environmental sensor.
 
@@ -14,20 +14,10 @@ After observing contrib-drivers 0.4 version providing inconsistent data and not 
 
 
 ### How to use
-
-Add this to your project level build.gradle:
-```
-allprojects {
-	repositories {
-		maven { url "https://jitpack.io" }
-	}
-}
-```
-
-Then add this repository as dependency in your app module build.gradle:
+Add this as dependency in your app module build.gradle:
 ```
 dependencies {
-    implementation 'com.knobtviker:bme280:1.1.0'
+    implementation 'com.knobtviker.android.things.contrib.community.driver:bme280:1.1.2'
 }
 ```
 
