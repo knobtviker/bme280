@@ -156,7 +156,6 @@ public class BME280SensorDriver implements AutoCloseable {
         private static final float DRIVER_RESOLUTION = 0.0262f;
         private static final float DRIVER_POWER = BME280.MAX_POWER_CONSUMPTION_PRESSURE_UA / 1000.f;
         private static final int DRIVER_VERSION = 1;
-        private static final String DRIVER_REQUIRED_PERMISSION = "";
 
         private boolean mEnabled;
         private UserSensor mUserSensor;
@@ -172,7 +171,6 @@ public class BME280SensorDriver implements AutoCloseable {
                     .setResolution(DRIVER_RESOLUTION)
                     .setPower(DRIVER_POWER)
                     .setMinDelay(DRIVER_MIN_DELAY_US)
-                    .setRequiredPermission(DRIVER_REQUIRED_PERMISSION)
                     .setMaxDelay(DRIVER_MAX_DELAY_US)
                     .setUuid(UUID.randomUUID())
                     .setDriver(this)
@@ -201,7 +199,6 @@ public class BME280SensorDriver implements AutoCloseable {
         private static final float DRIVER_RESOLUTION = 0.005f;
         private static final float DRIVER_POWER = BME280.MAX_POWER_CONSUMPTION_TEMP_UA / 1000.f;
         private static final int DRIVER_VERSION = 1;
-        private static final String DRIVER_REQUIRED_PERMISSION = "";
 
         private boolean mEnabled;
         private UserSensor mUserSensor;
@@ -217,7 +214,6 @@ public class BME280SensorDriver implements AutoCloseable {
                     .setResolution(DRIVER_RESOLUTION)
                     .setPower(DRIVER_POWER)
                     .setMinDelay(DRIVER_MIN_DELAY_US)
-                    .setRequiredPermission(DRIVER_REQUIRED_PERMISSION)
                     .setMaxDelay(DRIVER_MAX_DELAY_US)
                     .setUuid(UUID.randomUUID())
                     .setDriver(this)
@@ -246,7 +242,6 @@ public class BME280SensorDriver implements AutoCloseable {
         private static final float DRIVER_RESOLUTION = 0.005f;
         private static final float DRIVER_POWER = BME280.MAX_POWER_CONSUMPTION_HUMIDITY_UA / 1000.f;
         private static final int DRIVER_VERSION = 1;
-        private static final String DRIVER_REQUIRED_PERMISSION = "";
 
         private boolean mEnabled;
         private UserSensor mUserSensor;
@@ -262,7 +257,6 @@ public class BME280SensorDriver implements AutoCloseable {
                     .setResolution(DRIVER_RESOLUTION)
                     .setPower(DRIVER_POWER)
                     .setMinDelay(DRIVER_MIN_DELAY_US)
-                    .setRequiredPermission(DRIVER_REQUIRED_PERMISSION)
                     .setMaxDelay(DRIVER_MAX_DELAY_US)
                     .setUuid(UUID.randomUUID())
                     .setDriver(this)
