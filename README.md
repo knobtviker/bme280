@@ -17,7 +17,7 @@ After observing contrib-drivers 0.4 version providing inconsistent data and not 
 Add this as dependency in your app module build.gradle:
 ```
 dependencies {
-    implementation 'com.knobtviker.android.things.contrib.community.driver:bme280:1.1.2'
+    implementation 'com.knobtviker.android.things.contrib.community.driver:bme280:1.1.5'
 }
 ```
 
