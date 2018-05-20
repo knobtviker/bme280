@@ -339,7 +339,7 @@ public class BME280 implements AutoCloseable {
 
     public void setSamplingWeatherStation() throws IOException {
         setSampling(
-            MODE_FORCED,
+            MODE_NORMAL,
             OVERSAMPLING_1X, OVERSAMPLING_1X, OVERSAMPLING_1X,
             FILTER_OFF,
             STANDBY_MS_0_5
