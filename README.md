@@ -62,7 +62,7 @@ try {
 }
 ```
 
-If you need to read sensor values continuously, you can register the Bme680 with the system and
+If you need to read sensor values continuously, you can register the BME280 with the system and
 listen for sensor values using the [Sensor APIs](https://developer.android.com/guide/topics/sensors/sensors_overview):
 ```java
 SensorManager mSensorManager = getSystemService(Context.SENSOR_SERVICE);
