@@ -38,8 +38,8 @@ BME280 bme280;
 
 try {
     bme280 = new BME280(i2cBusName);
-    // Configure driverpower mode and oversampling for temperature, humidity or pressure,
-    bme280.setSamplingNormal();
+    // Configure driver power mode and oversampling for temperature, humidity or pressure,
+    bme280.setSamplingNormal(); // Various other presets are exposed
 } catch (IOException e) {
     // couldn't configure the device...
 }
@@ -67,7 +67,7 @@ listen for sensor values using the [Sensor APIs](https://developer.android.com/g
 ```java
 SensorManager mSensorManager = getSystemService(Context.SENSOR_SERVICE);
 SensorEventListener mListener = ...;
-c mSensorDriver;
+BME280SensorDriver mSensorDriver;
 
 mSensorManager.registerDynamicSensorCallback(new SensorManager.DynamicSensorCallback() {
     @Override
