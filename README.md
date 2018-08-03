@@ -13,6 +13,9 @@ I decided to implement my own take for this driver.
 - Config once and run, with sampling presets.
 - Consistent data without sudden humidity spikes or pressure dropouts.
 
+This driver is **_not_** compatible with BMP280 sensor.
+Compensation formulas are different, resulting in pressure and humidity data with a slight offset.
+
 How to use the driver
 ---------------------
 
