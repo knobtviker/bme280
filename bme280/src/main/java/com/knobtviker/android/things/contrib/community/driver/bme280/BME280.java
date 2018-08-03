@@ -6,6 +6,7 @@ package com.knobtviker.android.things.contrib.community.driver.bme280;
 
 import android.os.SystemClock;
 import android.support.annotation.IntDef;
+import android.support.annotation.VisibleForTesting;
 
 import com.google.android.things.pio.I2cDevice;
 import com.google.android.things.pio.PeripheralManager;
@@ -19,8 +20,8 @@ import java.lang.annotation.RetentionPolicy;
  */
 @SuppressWarnings({"unused", "WeakerAccess"})
 public class BME280 implements AutoCloseable {
-    private static final String TAG = BME280.class.getSimpleName();
 
+    private static final String TAG = BME280.class.getSimpleName();
 
     /**
      * Chip vendor for the BME280
@@ -131,12 +132,12 @@ public class BME280 implements AutoCloseable {
     public static final int FILTER_X8 = 0b011;
     public static final int FILTER_X16 = 0b100;
 
-
     /**
      * Standby duration.
      */
     @Retention(RetentionPolicy.SOURCE)
-    @IntDef({STANDBY_MS_0_5, STANDBY_MS_10, STANDBY_MS_20, STANDBY_MS_62_5, STANDBY_MS_125, STANDBY_MS_250, STANDBY_MS_500, STANDBY_MS_1000})
+    @IntDef(
+        {STANDBY_MS_0_5, STANDBY_MS_10, STANDBY_MS_20, STANDBY_MS_62_5, STANDBY_MS_125, STANDBY_MS_250, STANDBY_MS_500, STANDBY_MS_1000})
     public @interface StandByDuration {
     }
 
@@ -175,9 +176,9 @@ public class BME280 implements AutoCloseable {
     private static final int BME280_REG_ID = 0xD0;
     private static final int BME280_REG_VERSION = 0xD1;
     private static final int BME280_REG_SOFTRESET = 0xE0;
-    private static final int BME280_REG_CTRL_HUM = 0xF2;
+    public static final int BME280_REG_CTRL_HUM = 0xF2;
     private static final int BME280_REG_STATUS = 0xF3;
-    private static final int BME280_REG_CTRL = 0xF4;
+    public static final int BME280_REG_CTRL = 0xF4;
     private static final int BME280_REG_CONFIG = 0xF5;
 
     private static final int BME280_REG_PRESS = 0xF7;
@@ -193,7 +194,7 @@ public class BME280 implements AutoCloseable {
     private final byte[] buffer = new byte[3];
 
     private int chipId;
-    private int temperatureFine;
+    private static int temperatureFine;
 
     /**
      * Create a new BMP/BME280 sensor driver connected on the given bus.
@@ -264,7 +265,7 @@ public class BME280 implements AutoCloseable {
 
         chipId = this.device.readRegByte(BME280_REG_ID);
         if (chipId != CHIP_ID_BME280) {
-            throw new IOException("Failed to find Bosch BME280! Chip ID " + chipId);
+            throw new IOException("I2C device not open. Failed to find Bosch BME280!");
         }
 
         while (isReadingCalibration()) {
@@ -303,15 +304,16 @@ public class BME280 implements AutoCloseable {
     /**
      * Returns true if chip is busy reading calibration data
      */
+    @SuppressWarnings("PointlessBitwiseExpression")
     private boolean isReadingCalibration() throws IOException {
-        final int rStatus = device.readRegByte(BME280_REG_STATUS) & 0xff;
+        final int readingStatus = device.readRegByte(BME280_REG_STATUS) & 0xff;
 
-        return (rStatus & (1 << 0)) != 0;
+        return (readingStatus & (1 << 0)) != 0;
     }
 
     public void setSampling(@Mode final int mode, @Oversampling final int temperatureSampling,
-                            @Oversampling final int pressureSampling, @Oversampling final int humiditySampling,
-                            @Filter final int filter, @StandByDuration final int duration) throws IOException {
+        @Oversampling final int pressureSampling, @Oversampling final int humiditySampling,
+        @Filter final int filter, @StandByDuration final int duration) throws IOException {
 
         measurement.mode = mode;
         measurement.oversamplingTemperature = temperatureSampling;
@@ -322,7 +324,8 @@ public class BME280 implements AutoCloseable {
         config.duration = duration;
         config.filter = filter;
 
-        // You must make sure to also set BME280_REG_CTRL after setting the BME280_REG_CTRL_HUM register, otherwise the values won't be applied
+        // You must make sure to also set BME280_REG_CTRL after setting the BME280_REG_CTRL_HUM register, otherwise the values won't be
+        // applied
         device.writeRegByte(BME280_REG_CTRL_HUM, (byte) measurementHumidity.get());
         device.writeRegByte(BME280_REG_CONFIG, (byte) config.get());
         device.writeRegByte(BME280_REG_CTRL, (byte) measurement.get());
@@ -427,7 +430,7 @@ public class BME280 implements AutoCloseable {
         final int rawPressure = readSample(BME280_REG_PRESS);
         final float pressure = compensatePressure(rawPressure, calibration.pressure);
 
-        return new float[]{temperature, pressure};
+        return new float[] {temperature, pressure};
     }
 
     /**
@@ -457,7 +460,7 @@ public class BME280 implements AutoCloseable {
         final int rawPressure = readSample(BME280_REG_PRESS);
         final float pressure = compensatePressure(rawPressure, calibration.pressure);
 
-        return new float[]{temperature, humidity, pressure};
+        return new float[] {temperature, humidity, pressure};
     }
 
     /**
@@ -509,56 +512,78 @@ public class BME280 implements AutoCloseable {
             int msb = buffer[0] & 0xff;
             int lsb = buffer[1] & 0xff;
             return msb << 8 | lsb;
-
         }
-    }
-
-    // Compensation formula from the BME280 datasheet.
-    private float compensateTemperature(final int measuredTemperature, final int[] calibrationData) {
-        float var1 = (measuredTemperature / 16384.0f - calibrationData[0] / 1024.0f) * calibrationData[1];
-        float var2 = ((measuredTemperature / 131072.0f - calibrationData[0] / 8192.0f) * (measuredTemperature / 131072.0f - calibrationData[0] / 8192.0f)) * calibrationData[2];
-
-        temperatureFine = (int) (var1 + var2);
-
-        return temperatureFine / 5120.0f;
     }
 
     // Compensation formula from the BME280 datasheet.
     private float compensatePressure(final int measuredPressure, final int[] calibration) {
-        float var1 = (float) temperatureFine / 2.0f - 64000.0f;
-        float var2 = var1 * var1 * calibration[5] / 32768.0f;
-        var2 = var2 + var1 * calibration[4] * 2.0f;
-        var2 = var2 / 4.0f + calibration[3] * 65536.0f;
-        float var3 = calibration[2] * var1 * var1 / 524288.0f;
-        var1 = (var3 + calibration[1] * var1) / 524288.0f;
-        var1 = (1.0f + var1 / 32768.0f) * calibration[0];
-
-        if (var1 == 0.0f) {
-            return 0; // avoid exception caused by division by zero
-        }
-
-        float pressure = 1048576.0f - measuredPressure;
-        pressure = ((pressure - var2 / 4096.0f) * 6250.0f) / var1;
-        var1 = calibration[8] * pressure * pressure / 2147483648.0f;
-        var2 = pressure * calibration[7] / 32768.0f;
-        pressure = pressure + (var1 + var2 + calibration[6]) / 16.0f;
-
-        pressure = pressure / 100.0f;
-
-        return Math.min(Math.max(pressure, MIN_PRESSURE_HPA), MAX_PRESSURE_HPA);
+        return compensatePressure(measuredPressure, calibration, temperatureFine);
     }
 
     // Compensation formula from the BME280 datasheet.
     private float compensateHumidity(final int measuredHumidity, final int[] calibration) {
-        float var1 = (float) temperatureFine - 76800.0f;
-        float var2 = (calibration[3] * 64.0f + (calibration[4] / 16384.0f) * var1);
-        float var3 = measuredHumidity - var2;
-        float var4 = calibration[1] / 65536.0f;
-        float var5 = (1.0f + (calibration[2] / 67108864.0f) * var1);
-        float var6 = 1.0f + (calibration[5] / 67108864.0f) * var1 * var5;
-        var6 = var3 * var4 * (var5 * var6);
-        float humidity = var6 * (1.0f - calibration[0] * var6 / 524288.0f);
+        return compensateHumidity(measuredHumidity, calibration, temperatureFine);
+    }
 
-        return Math.min(Math.max(humidity, MIN_HUMIDITY_PERCENT), MAX_HUMIDITY_PERCENT);
+    @VisibleForTesting
+    public void setSamplingSkipped() throws IOException {
+        setSampling(
+            MODE_NORMAL,
+            OVERSAMPLING_SKIPPED, OVERSAMPLING_SKIPPED, OVERSAMPLING_SKIPPED,
+            FILTER_OFF,
+            STANDBY_MS_0_5
+        );
+    }
+
+    // Compensation formula from the BME280 datasheet.
+    @VisibleForTesting
+    public static float compensateTemperature(final int measuredTemperature, final int[] calibrationData) {
+        final int var1 = ((((measuredTemperature >> 3) - (calibrationData[0] << 1))) * calibrationData[1]) >> 11;
+        final int var2 = (((((measuredTemperature >> 4) - calibrationData[0])
+            * ((measuredTemperature >> 4) - calibrationData[0])) >> 12)
+            * calibrationData[2]) >> 14;
+
+        temperatureFine = var1 + var2;
+
+        return ((temperatureFine * 5 + 128) >> 8) / 100.0f;
+    }
+
+    // Compensation formula from the BME280 datasheet.
+    @VisibleForTesting
+    public static float compensateHumidity(final int measuredHumidity, final int[] calibration, final int temperatureFine) {
+        int var1 = (temperatureFine - 76800);
+        var1 = (((((measuredHumidity << 14) - (calibration[3] << 20) - (calibration[4] * var1)) + 16384) >> 15)
+            * (((((((var1 * calibration[5]) >> 10)
+            * (((var1 * calibration[2]) >> 11) + 32768)) >> 10) + 2097152)
+            * calibration[1] + 8192) >> 14));
+        var1 = (var1 - (((((var1 >> 15) * (var1 >> 15)) >> 7) * calibration[0]) >> 4));
+        var1 = (var1 < 0 ? 0 : var1);
+        var1 = (var1 > 419430400 ? 419430400 : var1);
+
+        return (var1 >> 12) / 1024.0f;
+    }
+
+    // Compensation formula from the BME280 datasheet.
+    @VisibleForTesting
+    public static float compensatePressure(final int measuredPressure, final int[] calibration, final int temperatureFine) {
+        long var1 = ((long) temperatureFine) - 128000;
+
+        long var2 = var1 * var1 * (long) calibration[5];
+        var2 = var2 + ((var1 * (long) calibration[4]) << 17);
+        var2 = var2 + (((long) calibration[3]) << 35);
+        var1 = ((var1 * var1 * (long) calibration[2]) >> 8) + ((var1 * (long) calibration[1]) << 12);
+        var1 = (((((long) 1) << 47) + var1)) * ((long) calibration[0]) >> 33;
+
+        if (var1 == 0) {
+            return 0; // avoid exception caused by division by zero
+        }
+
+        long p = 1048576 - measuredPressure;
+        p = (((p << 31) - var2) * 3125) / var1;
+        var1 = (((long) calibration[8]) * (p >> 13) * (p >> 13)) >> 25;
+        var2 = (((long) calibration[7]) * p) >> 19;
+        p = ((p + var1 + var2) >> 8) + (((long) calibration[6]) << 4);
+
+        return p / 25600.0f;
     }
 }
