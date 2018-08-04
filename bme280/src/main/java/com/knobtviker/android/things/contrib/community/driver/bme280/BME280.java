@@ -7,6 +7,7 @@ package com.knobtviker.android.things.contrib.community.driver.bme280;
 import android.os.SystemClock;
 import android.support.annotation.IntDef;
 import android.support.annotation.VisibleForTesting;
+import android.util.Log;
 
 import com.google.android.things.pio.I2cDevice;
 import com.google.android.things.pio.PeripheralManager;
@@ -22,6 +23,8 @@ import java.lang.annotation.RetentionPolicy;
 public class BME280 implements AutoCloseable {
 
     private static final String TAG = BME280.class.getSimpleName();
+
+    private static int INVALID_CHIP_ID = -1;
 
     /**
      * Chip vendor for the BME280
@@ -136,8 +139,7 @@ public class BME280 implements AutoCloseable {
      * Standby duration.
      */
     @Retention(RetentionPolicy.SOURCE)
-    @IntDef(
-        {STANDBY_MS_0_5, STANDBY_MS_10, STANDBY_MS_20, STANDBY_MS_62_5, STANDBY_MS_125, STANDBY_MS_250, STANDBY_MS_500, STANDBY_MS_1000})
+    @IntDef({STANDBY_MS_0_5, STANDBY_MS_10, STANDBY_MS_20, STANDBY_MS_62_5, STANDBY_MS_125, STANDBY_MS_250, STANDBY_MS_500, STANDBY_MS_1000})
     public @interface StandByDuration {
     }
 
@@ -176,8 +178,12 @@ public class BME280 implements AutoCloseable {
     private static final int BME280_REG_ID = 0xD0;
     private static final int BME280_REG_VERSION = 0xD1;
     private static final int BME280_REG_SOFTRESET = 0xE0;
+
+    @VisibleForTesting
     public static final int BME280_REG_CTRL_HUM = 0xF2;
     private static final int BME280_REG_STATUS = 0xF3;
+
+    @VisibleForTesting
     public static final int BME280_REG_CTRL = 0xF4;
     private static final int BME280_REG_CONFIG = 0xF5;
 
@@ -193,7 +199,7 @@ public class BME280 implements AutoCloseable {
 
     private final byte[] buffer = new byte[3];
 
-    private int chipId;
+    private int chipId = INVALID_CHIP_ID;
     private static int temperatureFine;
 
     /**
@@ -253,23 +259,39 @@ public class BME280 implements AutoCloseable {
 
     private void connect(I2cDevice device) throws IOException {
         this.device = device;
+        this.calibration = new Calibration();
+        this.config = new Config();
+        this.measurement = new Measurement();
+        this.measurementHumidity = new MeasurementHumidity();
 
-        calibration = new Calibration();
-        config = new Config();
-        measurement = new Measurement();
-        measurementHumidity = new MeasurementHumidity();
+        setChipId();
 
-        this.device.writeRegByte(BME280_REG_SOFTRESET, (byte) 0xB6);
+        softReset();
 
-        SystemClock.sleep(300);
+        readCalibration();
 
-        chipId = this.device.readRegByte(BME280_REG_ID);
-        if (chipId != CHIP_ID_BME280) {
-            throw new IOException("I2C device not open. Failed to find Bosch BME280!");
+        setSamplingNormal();
+    }
+
+    /**
+     * Mandatory soft reset on connection and wait until it's finished
+     */
+    private void softReset() throws IOException {
+        if (device == null) {
+            throw new IllegalStateException("I2C device not open");
         }
 
-        while (isReadingCalibration()) {
-            SystemClock.sleep(100);
+        device.writeRegByte(BME280_REG_SOFTRESET, (byte) 0xB6);
+
+        SystemClock.sleep(300);
+    }
+
+    /**
+     * Read calibration data
+     */
+    private void readCalibration() throws IOException {
+        if (device == null) {
+            throw new IllegalStateException("I2C device not open");
         }
 
         // Read temperature calibration data (3 words). First value is unsigned.
@@ -298,7 +320,9 @@ public class BME280 implements AutoCloseable {
         calibration.humidity[4] = (E6 << 4) | (E5 >> 4);
         calibration.humidity[5] = E7;
 
-        setSamplingNormal();
+        //        while (isReadingCalibration()) {
+        //            SystemClock.sleep(100);
+        //        }
     }
 
     /**
@@ -314,6 +338,9 @@ public class BME280 implements AutoCloseable {
     public void setSampling(@Mode final int mode, @Oversampling final int temperatureSampling,
         @Oversampling final int pressureSampling, @Oversampling final int humiditySampling,
         @Filter final int filter, @StandByDuration final int duration) throws IOException {
+        if (device == null) {
+            throw new IllegalStateException("I2C device not open");
+        }
 
         measurement.mode = mode;
         measurement.oversamplingTemperature = temperatureSampling;
@@ -324,8 +351,8 @@ public class BME280 implements AutoCloseable {
         config.duration = duration;
         config.filter = filter;
 
-        // You must make sure to also set BME280_REG_CTRL after setting the BME280_REG_CTRL_HUM register, otherwise the values won't be
-        // applied
+        // You must make sure to also set BME280_REG_CTRL after setting the BME280_REG_CTRL_HUM register,
+        // otherwise the values won't be applied
         device.writeRegByte(BME280_REG_CTRL_HUM, (byte) measurementHumidity.get());
         device.writeRegByte(BME280_REG_CONFIG, (byte) config.get());
         device.writeRegByte(BME280_REG_CTRL, (byte) measurement.get());
@@ -358,15 +385,44 @@ public class BME280 implements AutoCloseable {
         );
     }
 
-    public void takeForcedMeasurement() throws IOException {
-        // Only in forced mode
-        if (measurement.mode == MODE_FORCED) {
-            // Set to forced mode, i.e. "take next measurement"
-            device.writeRegByte(BME280_REG_CTRL, (byte) measurement.get());
-            // Wait until measurement has been completed, otherwise we would read the old values from the last measurement
-            while ((device.readRegByte(BME280_REG_STATUS) & 0x08) == 0) {
-                SystemClock.sleep(1);
-            }
+    /**
+     * Force read the current temperature, humidity and barometric pressure.
+     * Mode state is saved and restored automatically on start and end of this method.
+     *
+     * @return a 3-element array. The first element is temperature in degrees Celsius, second is humidity percentage and the
+     * third is barometric pressure in hPa units.
+     * @throws IOException
+     */
+    public float[] takeForcedMeasurement() throws IOException {
+        final int currentMode = measurement.mode;
+
+        if (currentMode != MODE_FORCED) {
+            measurement.mode = MODE_FORCED;
+        }
+
+        device.writeRegByte(BME280_REG_CTRL_HUM, (byte) measurementHumidity.get());
+        device.writeRegByte(BME280_REG_CTRL, (byte) measurement.get());
+
+        throttleMeasurement();
+
+        final float[] forcedData = readAll();
+
+        measurement.mode = currentMode;
+
+        return forcedData;
+    }
+
+    /**
+     * Read and set the sensor chip ID.
+     */
+    private void setChipId() throws IOException {
+        if (device == null) {
+            throw new IllegalStateException("I2C device not open");
+        }
+
+        chipId = device.readRegByte(BME280_REG_ID);
+        if (chipId != CHIP_ID_BME280) {
+            Log.e(TAG, "Failed to find Bosch BME280!");
         }
     }
 
@@ -383,14 +439,15 @@ public class BME280 implements AutoCloseable {
      * @return the current temperature in degrees Celsius
      */
     public float readTemperature() throws IOException, IllegalStateException {
+        if (device == null) {
+            throw new IllegalStateException("I2C device not open");
+        }
+
         if (measurement.oversamplingTemperature == OVERSAMPLING_SKIPPED) {
             throw new IllegalStateException("BME280 temperature oversampling is skipped");
         }
 
-        // Wait until measurement has been completed, otherwise we would read the values from the last measurement
-        while ((device.readRegByte(BME280_REG_STATUS) & 0x08) == 0) {
-            SystemClock.sleep(20);
-        }
+        throttleMeasurement();
 
         final int rawTemp = readSample(BME280_REG_TEMP);
         return compensateTemperature(rawTemp, calibration.temperature);
@@ -512,6 +569,25 @@ public class BME280 implements AutoCloseable {
             int msb = buffer[0] & 0xff;
             int lsb = buffer[1] & 0xff;
             return msb << 8 | lsb;
+        }
+    }
+
+    private void throttleMeasurement() throws IOException {
+        if (device == null) {
+            throw new IllegalStateException("I2C device not open");
+        }
+
+        final int MAX_ATTEMPTS_READ = 10;
+        final int SLEEP_TIME = 10; //ms
+        // Wait a minimum amount of time until measurement has been completed,
+        // otherwise we would read the values from the last measurement
+        // Or if you count 10 attempts max - to avoid a waiting deadlock
+        for (int i = 0; i < MAX_ATTEMPTS_READ; i++) {
+            if ((device.readRegByte(BME280_REG_STATUS) & 0x08) == 0) {
+                SystemClock.sleep(SLEEP_TIME);
+            } else {
+                break;
+            }
         }
     }
 
